@@ -7,18 +7,23 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Node
+node_modules/
+dist/
+dist-ssr/
+.vite/
 *.local
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# OS / Editor
 .DS_Store
+.idea
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# VS Code (repo에서는 extensions/settings만 허용)
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
