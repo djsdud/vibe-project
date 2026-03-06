@@ -1,0 +1,272 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AgeGroup {
+  A20
+  A30
+  A40
+  A50
+  A60P
+}
+
+enum BudgetTier {
+  LOW
+  MID
+  HIGH
+}
+
+enum TimePreference {
+  WEEKDAY_EVENING
+  WEEKEND
+  BOTH
+}
+
+enum RelationshipPref {
+  SOLO
+  PEOPLE
+  ANY
+}
+
+enum SpacePref {
+  INDOOR
+  OUTDOOR
+  ANY
+}
+
+enum VariantMode {
+  SOLO
+  GROUP
+  HYBRID
+}
+
+enum VariantSpace {
+  INDOOR
+  OUTDOOR
+  MIXED
+}
+
+enum VariantBudgetTier {
+  LOW
+  MID
+  HIGH
+}
+
+enum TimeTier {
+  MICRO  // 5~15m
+  SHORT  // 20~60m
+  LONG   // 60m+
+}
+
+enum Seasonality {
+  ALL
+  SPRING
+  SUMMER
+  FALL
+  WINTER
+}
+
+enum RiskLevel {
+  LOW
+  MID
+  HIGH
+}
+
+enum VariantStatus {
+  DRAFT
+  ACTIVE
+  DEPRECATED
+}
+
+enum BoardStatus {
+  SAVED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TriedStatus {
+  TRIED
+  NOT_TRIED
+}
+
+enum PerceivedDifficulty {
+  EASY
+  NORMAL
+  HARD
+}
+
+enum SpendCategory {
+  FASHION
+  DINING
+  TRAVEL
+  DIGITAL_CONTENT
+  FITNESS
+  CULTURE
+  SELF_DEV
+  HOME_LIVING
+  PET
+  FINANCE
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String?  @unique
+  passwordHash  String?  // 일반 회원가입용 (소셜만 쓰면 null 가능)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  profile       UserProfile?
+  boardItems    BoardItem[]
+  recLogs       RecommendationLog[]
+  feedbacks     Feedback[]
+  publicProfile PublicProfile?
+}
+
+model UserProfile {
+  id               String           @id @default(cuid())
+  userId           String           @unique
+  ageGroup         AgeGroup
+  budgetTier       BudgetTier
+  timePreference   TimePreference
+  relationshipPref RelationshipPref
+  spacePref        SpacePref
+  topSpend1        SpendCategory
+  topSpend2        SpendCategory
+  topSpend3        SpendCategory
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([ageGroup])
+  @@index([budgetTier])
+}
+
+model Hobby {
+  id                 String   @id @default(cuid())
+  hobbyKey           String   @unique // ex) "h_001"
+  nameKo             String
+  oneLiner           String
+  coreTags           String[] // 최대 5는 앱 레벨에서 제한
+  starterKit         String[] // 0~5
+  contraindications  String[] // 비추천 조건 텍스트
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  variants           Variant[]
+}
+
+model Variant {
+  id            String        @id @default(cuid())
+  variantKey    String        @unique // ex) "v_001"
+  hobbyId       String
+  mode          VariantMode
+  space         VariantSpace
+  budgetTier    VariantBudgetTier
+  timeTier      TimeTier
+  difficulty    Int           // 1~5 (앱 레벨 validation)
+  seasonality   Seasonality
+  riskLevel     RiskLevel
+
+  weeklyPlan7d  String[]      // length=7 (앱 레벨 validation)
+  plan30d       String[]      // length=4 (주차별)
+
+  // 공유 템플릿
+  shortCaption  String
+  longCaption   String
+  hashtags      String[]
+  proofPrompt   String
+
+  status        VariantStatus @default(DRAFT)
+  lastUpdated   DateTime      @default(now())
+  version       String        // ex) "0.1.0"
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  hobby         Hobby         @relation(fields: [hobbyId], references: [id], onDelete: Cascade)
+
+  boardItems    BoardItem[]
+  recItems      RecommendationItem[]
+  feedbacks     Feedback[]
+
+  @@index([status])
+  @@index([budgetTier, timeTier, space, mode])
+}
+
+model RecommendationLog {
+  id          String   @id @default(cuid())
+  userId      String
+  reasonLine  String?  // 업데이트 이유 1줄(업데이트 요청 시에만)
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items       RecommendationItem[]
+}
+
+model RecommendationItem {
+  id          String   @id @default(cuid())
+  logId       String
+  variantId   String
+  rank        Int
+  score       Int
+  explain     String   // 추천 이유 1~2문장
+  estCost     String   // "low/mid/high" 또는 "범위" 텍스트
+  estTime     String   // "micro/short/long" 또는 텍스트
+  supplies    String[] // 0~5개
+
+  log         RecommendationLog @relation(fields: [logId], references: [id], onDelete: Cascade)
+  variant     Variant          @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@unique([logId, rank])
+  @@index([variantId])
+}
+
+model Feedback {
+  id                  String              @id @default(cuid())
+  userId              String
+  variantId           String
+  triedStatus         TriedStatus
+  satisfaction        Int                 // 1~5
+  perceivedDifficulty PerceivedDifficulty
+  spendAmount         Int?                // 실제 지출(원), optional
+  createdAt           DateTime            @default(now())
+
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  variant             Variant             @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([variantId, createdAt])
+}
+
+model BoardItem {
+  id          String      @id @default(cuid())
+  userId      String
+  variantId   String
+  status      BoardStatus @default(SAVED)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  variant     Variant     @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, variantId])
+  @@index([userId, status])
+}
+
+model PublicProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  shareToken  String   @unique // 공개 링크 토큰
+  nickname    String   // 기본: "취미루프_1234"
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
